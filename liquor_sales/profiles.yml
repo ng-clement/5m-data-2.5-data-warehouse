@@ -10,7 +10,7 @@ liquor_sales: # profile name.
       location: US
       method: oauth
       priority: interactive
-      project: "<YOUR-GCP-PROJECT-ID>" # GCP project id
+      project: dsai-gcp-project-2-2
       threads: 1
       type: bigquery
   target: dev # default target for profile, points to 1 of the output above 
