@@ -29,3 +29,33 @@ Happy modeling!
 [0m11:34:30.098395 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7481db0bff50>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7481d671acd0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7481daf889d0>]}
 [0m11:34:30.102080 [debug] [MainThread]: Flushing usage events
 [0m11:34:31.120729 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m11:41:28.770834 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x70ae7d9cda50>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x70ae7aee0ad0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x70ae7acb5650>]}
+
+
+============================== 11:41:28.778251 | 6fbec626-742a-4cfc-bd87-b5fd56a2623f ==============================
+[0m11:41:28.778251 [info ] [MainThread]: Running with dbt=1.11.11
+[0m11:41:28.779847 [debug] [MainThread]: running dbt with arguments {'log_format': 'default', 'no_print': 'None', 'log_path': 'logs', 'static_parser': 'True', 'empty': 'None', 'target_path': 'None', 'quiet': 'False', 'fail_fast': 'False', 'log_cache_events': 'False', 'profiles_dir': '/home/clement/.dbt', 'introspect': 'True', 'invocation_command': 'dbt init austin_bikeshare_demo', 'debug': 'False', 'write_json': 'True', 'use_experimental_parser': 'False', 'cache_selected_only': 'False', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'send_anonymous_usage_stats': 'True', 'partial_parse': 'True', 'version_check': 'True', 'printer_width': '80', 'use_colors': 'True', 'warn_error': 'None', 'indirect_selection': 'eager'}
+[0m11:41:28.806407 [debug] [MainThread]: Starter project path: /home/clement/miniconda3/envs/elt/lib/python3.11/site-packages/dbt/include/starter_project
+[0m11:41:28.847337 [info ] [MainThread]: 
+Your new dbt project "austin_bikeshare_demo" was created!
+
+For more information on how to configure the profiles.yml file,
+please consult the dbt documentation here:
+
+  https://docs.getdbt.com/docs/configure-your-profile
+
+One more thing:
+
+Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
+
+  https://community.getdbt.com/
+
+Happy modeling!
+
+[0m11:41:28.848171 [info ] [MainThread]: Setting up your profile.
+[0m11:42:48.030200 [info ] [MainThread]: Profile austin_bikeshare_demo written to /home/clement/.dbt/profiles.yml using target's profile_template.yml and your supplied values. Run 'dbt debug' to validate the connection.
+[0m11:42:48.039989 [debug] [MainThread]: Resource report: {"command_name": "init", "command_success": true, "command_wall_clock_time": 76.71253, "process_in_blocks": "456", "process_kernel_time": 1.225249, "process_mem_max_rss": "244916", "process_out_blocks": "96", "process_user_time": 7.586645}
+[0m11:42:48.044724 [debug] [MainThread]: Command `dbt init` succeeded at 11:42:48.044048 after 76.72 seconds
+[0m11:42:48.047857 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x70ae7abf2650>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x70ae7f6ae9d0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x70ae7f6adf10>]}
+[0m11:42:48.050224 [debug] [MainThread]: Flushing usage events
+[0m11:42:49.193423 [debug] [MainThread]: An error was encountered while trying to flush usage events

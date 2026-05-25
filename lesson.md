@@ -142,6 +142,8 @@ Now that you understand what each file does, run the commands in order:
 
 **1. Run snapshots first** — snapshots must exist before the dimension models that reference them.
 
+The snapshot table is found in GCP console, snapshots
+
 ```bash
 dbt snapshot
 ```
@@ -413,6 +415,8 @@ Once complete you will see a confirmation message and a new `austin_bikeshare_de
 
 ![dbt init success message](assets/dbt_init_msg.PNG)
 
+Remove example folder in models. It will cause error in dbt test
+
 ---
 
 #### Step 2 — Set up profiles.yml
@@ -465,11 +469,45 @@ Using the liquor sales project as a reference, create:
 - Include the foreign keys (station IDs) and numeric measures (duration, etc.).
 - Reference the source with `{{ source(...) }}`.
 
+```sql
+SELECT
+    trip_id,
+    subscriber_type,
+    bike_id,
+    bike_type,
+    start_time,
+    start_station_id,
+    start_station_name,
+    end_station_id,
+    end_station_name,
+    duration_minutes
+FROM {{ source('austin_bikeshare', 'bikeshare_trips') }}
+```
+
 **At least one dimension model** (`models/star/dim_station.sql` or similar):
 - One row per station.
 - Include the descriptive attributes: station name, location, etc.
 - Reference the source with `{{ source(...) }}`.
-
+```sql
+SELECT DISTINCT
+    station_id,
+    name,
+    status,
+    location,
+    address,
+    alternate_name,
+    city_asset_number,
+    property_type,
+    number_of_docks,
+    power_type,
+    footprint_length,
+    footprint_width,
+    notes,
+    council_district,
+    image,
+    modified_date
+FROM {{ source('austin_bikeshare', 'bikeshare_stations') }}
+```
 Think about whether you need a snapshot. Ask yourself: _could a station's name or location change over time?_ If yes, the same SCD pattern from Exercise 1 applies.
 
 ---
@@ -479,6 +517,50 @@ Think about whether you need a snapshot. Ask yourself: _could a station's name o
 Create `models/schema.yml` and `models/star/schema.yml` with:
 - `unique` and `not_null` tests on every primary key.
 - At least one `relationships` test checking a foreign key in the fact table against the dimension.
+
+`models/schema.yml`
+```yml
+version: 2
+
+models:
+  - name: fact_trips
+    description: "Fact table for bike trips."
+    columns:
+      - name: trip_id
+        description: "The primary key for this table"
+        tests:
+          - unique
+          - not_null
+      - name: start_station_id
+        description: "The foreign key to the start station dimension table"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_id
+      - name: end_station_id
+        description: "The foreign key to the end station dimension table"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_id
+```       
+
+`models/star/schema.yml`
+```yml
+version: 2
+
+models:
+  - name: dim_station
+    description: "Dimension table for station."
+    columns:
+      - name: station_id
+        description: "The primary key for this table"
+        tests:
+          - unique
+          - not_null
+```
 
 Run the full pipeline:
 

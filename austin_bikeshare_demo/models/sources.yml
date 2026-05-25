@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: austin_bikeshare
+    database: bigquery-public-data
+    tables:
+      - name: bikeshare_trips
+      - name: bikeshare_stations

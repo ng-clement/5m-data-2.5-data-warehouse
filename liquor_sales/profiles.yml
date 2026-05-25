@@ -13,7 +13,8 @@ liquor_sales: # profile name.
       project: dsai-gcp-project-2-2
       threads: 1
       type: bigquery
-  target: dev # default target for profile, points to 1 of the output above 
+  target: dev 
+  # default target for profile, points to 1 of the output above 
   # Usually we use 'dev' for development and 'prod' for production
   # define target in dbt CLI via --target
   config:
