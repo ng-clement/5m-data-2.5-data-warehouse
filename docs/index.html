@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>From Raw Data to Business Insights — Austin Bikeshare with dbt</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --paper: #fafaf7;
+    --cream: #f5f0e8;
+    --accent: #c84b31;
+    --accent2: #2e86ab;
+    --accent3: #4caf50;
+    --muted: #6b7280;
+    --border: #e0d8cc;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+    --highlight: #fff3cd;
+    --step-active: #c84b31;
+    --step-done: #4caf50;
+    --step-idle: #d1cec8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Lato', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 16px;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    background: var(--ink);
+    color: #fff;
+    padding: 64px 40px 56px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 30% 60%, rgba(200,75,49,.25) 0%, transparent 60%),
+                radial-gradient(ellipse at 75% 20%, rgba(46,134,171,.2) 0%, transparent 55%);
+    pointer-events: none;
+  }
+  .hero-tag {
+    display: inline-block;
+    font-family: 'Source Code Pro', monospace;
+    font-size: 11px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 3px 10px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .hero h1 span { color: var(--accent); }
+  .hero p {
+    font-size: 1.1rem;
+    color: rgba(255,255,255,.7);
+    max-width: 600px;
+    margin: 0 auto 32px;
+    font-weight: 300;
+  }
+  .hero-bikes {
+    font-size: 2.5rem;
+    letter-spacing: .5em;
+    opacity: .6;
+  }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── PROGRESS STEPPER ── */
+  .stepper-wrap {
+    background: var(--cream);
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,.06);
+  }
+  .stepper {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+  .stepper::-webkit-scrollbar { display: none; }
+  .step-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    cursor: pointer;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    transition: all .2s;
+    font-size: .85rem;
+    font-weight: 700;
+    color: var(--muted);
+    position: relative;
+  }
+  .step-pill:hover { color: var(--ink); background: rgba(0,0,0,.03); }
+  .step-pill.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .step-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--step-idle);
+    color: #fff;
+    font-size: .7rem;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: background .2s;
+  }
+  .step-pill.active .step-num { background: var(--accent); }
+  .step-pill.done .step-num { background: var(--step-done); }
+  .step-pill.done .step-num::after { content: '✓'; }
+  .step-pill.done .step-num span { display: none; }
+
+  /* ── SECTIONS ── */
+  .section { display: none; padding: 48px 0 64px; animation: fadeUp .35s ease; }
+  .section.active { display: block; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 36px;
+  }
+  .section-icon {
+    font-size: 2.4rem;
+    flex-shrink: 0;
+    line-height: 1;
+    margin-top: 4px;
+  }
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+  .section-subtitle {
+    color: var(--muted);
+    font-size: .95rem;
+    font-weight: 300;
+  }
+
+  /* ── CALLOUT BOXES ── */
+  .callout {
+    border-left: 4px solid var(--accent2);
+    background: #f0f7fb;
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 24px 0;
+    font-size: .95rem;
+  }
+  .callout.analogy { border-color: #e67e22; background: #fef9f0; }
+  .callout.tip     { border-color: var(--accent3); background: #f0fbf2; }
+  .callout.warning { border-color: var(--accent); background: #fdf0ed; }
+  .callout-label {
+    font-family: 'Source Code Pro', monospace;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    font-weight: 600;
+    margin-bottom: 6px;
+    opacity: .7;
+  }
+
+  /* ── CODE BLOCKS ── */
+  .code-wrap {
+    background: var(--code-bg);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 20px 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  }
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(255,255,255,.05);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .code-dots { display: flex; gap: 6px; }
+  .code-dot {
+    width: 11px; height: 11px; border-radius: 50%;
+  }
+  .code-dot:nth-child(1) { background: #ff5f57; }
+  .code-dot:nth-child(2) { background: #febc2e; }
+  .code-dot:nth-child(3) { background: #28c840; }
+  .code-filename {
+    font-family: 'Source Code Pro', monospace;
+    font-size: .75rem;
+    color: rgba(255,255,255,.45);
+  }
+  .code-body {
+    padding: 20px;
+    font-family: 'Source Code Pro', monospace;
+    font-size: .82rem;
+    line-height: 1.7;
+    color: var(--code-text);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .kw  { color: #cba6f7; }
+  .fn  { color: #89b4fa; }
+  .str { color: #a6e3a1; }
+  .cm  { color: #6c7086; font-style: italic; }
+  .val { color: #fab387; }
+  .tbl { color: #f9e2af; }
+
+  /* ── TABLE ── */
+  .data-table-wrap { overflow-x: auto; margin: 20px 0; }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .85rem;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .data-table th {
+    background: var(--ink);
+    color: #fff;
+    padding: 10px 14px;
+    text-align: left;
+    font-family: 'Source Code Pro', monospace;
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+  }
+  .data-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink);
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:nth-child(even) td { background: var(--cream); }
+  .data-table .pk { color: var(--accent); font-weight: 700; font-family: 'Source Code Pro', monospace; font-size: .8rem; }
+  .data-table .fk { color: var(--accent2); font-weight: 600; font-family: 'Source Code Pro', monospace; font-size: .8rem; }
+  .table-label {
+    font-family: 'Source Code Pro', monospace;
+    font-size: .75rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  .badge-fact { background: #fde8e4; color: var(--accent); }
+  .badge-dim  { background: #e0f0f8; color: var(--accent2); }
+  .badge-snap { background: #e8f5e9; color: #2e7d32; }
+  .badge-raw  { background: #f3f4f6; color: #6b7280; }
+
+  /* ── DIAGRAM ── */
+  .diagram {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 24px;
+    margin: 24px 0;
+    text-align: center;
+  }
+  .diagram-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: wrap;
+    row-gap: 16px;
+  }
+  .flow-node {
+    background: var(--cream);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    min-width: 120px;
+    text-align: center;
+    position: relative;
+  }
+  .flow-node.source { border-color: #9ca3af; background: #f9fafb; }
+  .flow-node.snapshot { border-color: var(--accent3); background: #f0fbf2; }
+  .flow-node.model-fact { border-color: var(--accent); background: #fdf0ed; }
+  .flow-node.model-dim  { border-color: var(--accent2); background: #f0f7fb; }
+  .flow-node-icon { font-size: 1.5rem; margin-bottom: 4px; }
+  .flow-node-label { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .flow-node-name  { font-family: 'Source Code Pro', monospace; font-size: .8rem; font-weight: 600; margin-top: 4px; }
+  .flow-arrow {
+    font-size: 1.4rem;
+    color: var(--muted);
+    padding: 0 6px;
+    flex-shrink: 0;
+  }
+  .star-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    margin: 32px 0;
+  }
+  .star-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .star-box {
+    border-radius: 10px;
+    padding: 16px 22px;
+    min-width: 150px;
+    text-align: center;
+    border: 2px solid;
+  }
+  .star-box.fact { border-color: var(--accent); background: #fdf0ed; }
+  .star-box.dim  { border-color: var(--accent2); background: #f0f7fb; }
+  .star-box-title { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 4px; font-weight: 700; }
+  .star-box-name { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 700; }
+  .star-line {
+    font-size: .75rem;
+    font-family: 'Source Code Pro', monospace;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── STEPS LIST ── */
+  .steps-list { list-style: none; margin: 24px 0; }
+  .steps-list li {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    align-items: flex-start;
+  }
+  .step-circle {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: .85rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-circle.blue { background: var(--accent2); }
+  .step-circle.green { background: var(--accent3); }
+  .steps-list li .step-body { flex: 1; }
+  .steps-list li .step-body strong { display: block; margin-bottom: 4px; }
+
+  /* ── INTERACTIVE TOGGLE ── */
+  .toggle-group { margin: 20px 0; }
+  .toggle-btn {
+    background: none;
+    border: 2px solid var(--border);
+    padding: 9px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Lato', sans-serif;
+    font-size: .9rem;
+    font-weight: 700;
+    color: var(--muted);
+    margin-right: 8px;
+    margin-bottom: 8px;
+    transition: all .15s;
+  }
+  .toggle-btn.active, .toggle-btn:hover {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    background: #f0f7fb;
+  }
+  .toggle-pane { display: none; }
+  .toggle-pane.active { display: block; }
+
+  /* ── NAV BUTTONS ── */
+  .nav-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 0 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 48px;
+  }
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 22px;
+    border-radius: 6px;
+    font-family: 'Lato', sans-serif;
+    font-size: .9rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: 2px solid var(--border);
+    background: #fff;
+    color: var(--ink);
+    transition: all .15s;
+    text-decoration: none;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .nav-btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .nav-btn.primary:hover { background: #a83a24; border-color: #a83a24; }
+  .nav-btn:disabled, .nav-btn[disabled] { opacity: .35; cursor: default; pointer-events: none; }
+
+  /* ── QUIZ ── */
+  .quiz-q {
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 20px 0;
+  }
+  .quiz-q p { font-weight: 700; margin-bottom: 14px; }
+  .quiz-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: .9rem;
+    margin-bottom: 6px;
+    transition: background .15s;
+    border: 1px solid transparent;
+  }
+  .quiz-option:hover { background: #fff; border-color: var(--border); }
+  .quiz-option.correct { background: #e8f5e9; border-color: var(--accent3); color: #2e7d32; }
+  .quiz-option.wrong   { background: #fde8e4; border-color: var(--accent); color: var(--accent); }
+  .quiz-feedback { font-size: .85rem; margin-top: 10px; padding: 8px 12px; border-radius: 6px; display: none; }
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.ok  { background: #e8f5e9; color: #2e7d32; }
+  .quiz-feedback.bad { background: #fde8e4; color: #c0392b; }
+
+  /* ── MISC ── */
+  p { margin-bottom: 16px; }
+  h3 { font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 700; margin: 28px 0 10px; }
+  h4 { font-weight: 700; margin: 20px 0 8px; font-size: 1rem; }
+  ul, ol { padding-left: 24px; margin-bottom: 16px; }
+  li { margin-bottom: 6px; }
+  strong { font-weight: 700; }
+  .pill {
+    display: inline-block;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: .8rem;
+    font-family: 'Source Code Pro', monospace;
+  }
+  .inline-code {
+    background: #f0f0ea;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'Source Code Pro', monospace;
+    font-size: .85em;
+    color: var(--accent);
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .summary-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+  }
+  .summary-card .sc-icon { font-size: 2rem; margin-bottom: 8px; }
+  .summary-card .sc-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+  .summary-card .sc-val { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; color: var(--accent); }
+
+  @media (max-width: 600px) {
+    .hero { padding: 40px 20px 36px; }
+    .container { padding: 0 16px; }
+    .star-row { flex-direction: column; align-items: stretch; }
+    .diagram-flow { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">Data Engineering · dbt · BigQuery</div>
+  <h1>From Raw Data<br>to <span>Business Insights</span></h1>
+  <p>A step-by-step walkthrough of transforming public Austin Bikeshare data into analysis-ready tables using dbt and BigQuery — no prior experience needed.</p>
+  <div class="hero-bikes">🚲 🚲 🚲 🚲 🚲</div>
+</div>
+
+<!-- STEPPER -->
+<div class="stepper-wrap">
+  <div class="stepper" id="stepper">
+    <div class="step-pill active" data-step="0" onclick="goTo(0)">
+      <div class="step-num"><span>1</span></div> The Big Picture
+    </div>
+    <div class="step-pill" data-step="1" onclick="goTo(1)">
+      <div class="step-num"><span>2</span></div> The Raw Data
+    </div>
+    <div class="step-pill" data-step="2" onclick="goTo(2)">
+      <div class="step-num"><span>3</span></div> Star Schema
+    </div>
+    <div class="step-pill" data-step="3" onclick="goTo(3)">
+      <div class="step-num"><span>4</span></div> dbt Project
+    </div>
+    <div class="step-pill" data-step="4" onclick="goTo(4)">
+      <div class="step-num"><span>5</span></div> Snapshots
+    </div>
+    <div class="step-pill" data-step="5" onclick="goTo(5)">
+      <div class="step-num"><span>6</span></div> Models
+    </div>
+    <div class="step-pill" data-step="6" onclick="goTo(6)">
+      <div class="step-num"><span>7</span></div> Tests
+    </div>
+    <div class="step-pill" data-step="7" onclick="goTo(7)">
+      <div class="step-num"><span>8</span></div> Run It!
+    </div>
+    <div class="step-pill" data-step="8" onclick="goTo(8)">
+      <div class="step-num"><span>9</span></div> Review
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 0: THE BIG PICTURE                    -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section active" id="step-0">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">🗺️</div>
+    <div>
+      <div class="section-title">The Big Picture</div>
+      <div class="section-subtitle">What are we doing, and why does it matter?</div>
+    </div>
+  </div>
+
+  <p>Imagine you work for the City of Austin and you want to answer questions like: <em>"Which bike stations are most popular in the morning rush?"</em> or <em>"How has ride duration changed over the years?"</em></p>
+
+  <p>Google BigQuery has a public dataset with every single Austin bikeshare trip ever recorded. That's millions of rows of raw data. The problem is, raw data is messy — it's designed for record-keeping, not for answering business questions.</p>
+
+  <div class="callout analogy">
+    <div class="callout-label">🍳 Analogy</div>
+    Think of raw data as a fridge full of ingredients. You <em>could</em> eat raw flour and uncooked eggs, but what you really want is a finished meal. <strong>dbt (data build tool)</strong> is your recipe book — it transforms those raw ingredients into something delicious and useful.
+  </div>
+
+  <p>The transformation process follows a pattern called <strong>ELT</strong>:</p>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="flow-node source">
+        <div class="flow-node-icon">🌐</div>
+        <div class="flow-node-label">Extract</div>
+        <div class="flow-node-name">BigQuery Public Data</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node source">
+        <div class="flow-node-icon">📥</div>
+        <div class="flow-node-label">Load</div>
+        <div class="flow-node-name">Your BigQuery Project</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node model-fact">
+        <div class="flow-node-icon">⚙️</div>
+        <div class="flow-node-label">Transform</div>
+        <div class="flow-node-name">dbt Models</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node model-dim">
+        <div class="flow-node-icon">📊</div>
+        <div class="flow-node-label">Analyze</div>
+        <div class="flow-node-name">Business Tables</div>
+      </div>
+    </div>
+  </div>
+
+  <p>By the end of this lesson, you will have transformed raw bikeshare trip data into two clean, analysis-ready tables:</p>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="sc-icon">📋</div>
+      <div class="sc-label">Fact Table</div>
+      <div class="sc-val">fact_trips</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-icon">📍</div>
+      <div class="sc-label">Dimension Table</div>
+      <div class="sc-val">dim_station</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-icon">📸</div>
+      <div class="sc-label">Snapshot</div>
+      <div class="sc-val">station_snapshot</div>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <div class="callout-label">💡 Key Term — dbt</div>
+    <strong>dbt (data build tool)</strong> lets you write SQL files and it handles running them in the right order, testing the results, and documenting everything. You write the "what", dbt handles the "how and when".
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" disabled>← Previous</button>
+    <button class="nav-btn primary" onclick="goTo(1)">Next: The Raw Data →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 1: THE RAW DATA                       -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section" id="step-1">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">🗃️</div>
+    <div>
+      <div class="section-title">The Raw Data</div>
+      <div class="section-subtitle">What does Austin bikeshare data actually look like?</div>
+    </div>
+  </div>
+
+  <p>Google makes the Austin Bikeshare dataset freely available in BigQuery. It lives in a project called <span class="inline-code">bigquery-public-data</span>, in a dataset called <span class="inline-code">austin_bikeshare</span>.</p>
+
+  <p>There are two source tables we care about:</p>
+
+  <h3>Table 1 — <span class="inline-code">bikeshare_trips</span></h3>
+  <p>Every bike ride ever taken. Each row is one trip.</p>
+
+  <div class="table-label"><span class="badge badge-raw">raw source</span> bigquery-public-data.austin_bikeshare.bikeshare_trips</div>
+  <div class="data-table-wrap">
+    <table class="data-table">
+      <thead><tr>
+        <th>trip_id</th><th>subscriber_type</th><th>bike_id</th><th>start_time</th><th>start_station_id</th><th>end_station_id</th><th>duration_minutes</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="pk">1278384</td><td>Walk Up</td><td>B00477</td><td>2017-03-06 15:21</td><td class="fk">2538</td><td class="fk">2545</td><td>17</td></tr>
+        <tr><td class="pk">1278385</td><td>Annual Member</td><td>B00391</td><td>2017-03-06 15:22</td><td class="fk">2545</td><td class="fk">2552</td><td>9</td></tr>
+        <tr><td class="pk">1278386</td><td>24-Hour Kiosk</td><td>B00219</td><td>2017-03-06 15:30</td><td class="fk">2538</td><td class="fk">2500</td><td>23</td></tr>
+        <tr><td colspan="7" style="text-align:center;color:var(--muted);font-size:.8rem;padding:8px">… millions more rows …</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Table 2 — <span class="inline-code">bikeshare_stations</span></h3>
+  <p>All bike stations in the city. Each row is one station.</p>
+
+  <div class="table-label"><span class="badge badge-raw">raw source</span> bigquery-public-data.austin_bikeshare.bikeshare_stations</div>
+  <div class="data-table-wrap">
+    <table class="data-table">
+      <thead><tr>
+        <th>station_id</th><th>name</th><th>location</th><th>address</th><th>property_type</th><th>number_of_docks</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="pk">2500</td><td>Riverside Dr & S 1st St</td><td>30.259,-97.748</td><td>200 Lee Barton Dr</td><td>City Owned</td><td>15</td></tr>
+        <tr><td class="pk">2538</td><td>Congress Ave & 2nd St</td><td>30.267,-97.741</td><td>316 Congress Ave</td><td>City Owned</td><td>19</td></tr>
+        <tr><td class="pk">2545</td><td>Lamar Blvd & 6th St</td><td>30.268,-97.752</td><td>600 N Lamar Blvd</td><td>Private</td><td>11</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <div class="callout-label">🔗 Notice the Connection</div>
+    See how <span class="inline-code">start_station_id</span> and <span class="inline-code">end_station_id</span> in the trips table match the <span class="inline-code">station_id</span> in the stations table? This link (called a <strong>foreign key</strong>) is what lets us ask questions like "What is the name of the starting station for trip #1278384?"
+  </div>
+
+  <div class="callout warning">
+    <div class="callout-label">⚠️ The Problem with Raw Data</div>
+    Raw data changes over time. Stations open and close. What if you want to know what the station data looked like <em>last year</em>? Raw tables don't keep history — they just show the current state. We'll solve this in Step 5 with <strong>Snapshots</strong>.
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" onclick="goTo(0)">← The Big Picture</button>
+    <button class="nav-btn primary" onclick="goTo(2)">Next: Star Schema →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 2: STAR SCHEMA                        -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section" id="step-2">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">⭐</div>
+    <div>
+      <div class="section-title">Designing a Star Schema</div>
+      <div class="section-subtitle">The blueprint for analysis-ready data</div>
+    </div>
+  </div>
+
+  <p>Before we write any code, we need a plan. In data warehousing, we use a design pattern called a <strong>Star Schema</strong>.</p>
+
+  <div class="callout analogy">
+    <div class="callout-label">🌟 Analogy</div>
+    A star schema looks like a star in a night sky. In the center is a <strong>Fact table</strong> — it records events (things that happened). Surrounding it are <strong>Dimension tables</strong> — they describe the "who, what, where" context for those events.
+  </div>
+
+  <p>For our Austin Bikeshare project, the design is:</p>
+
+  <div class="diagram">
+    <div class="star-center">
+      <div class="star-row">
+        <div class="star-box dim">
+          <div class="star-box-title">Dimension</div>
+          <div class="star-box-name">dim_station</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div class="star-line">start_station_id → station_id</div>
+          <div style="font-size:1.5rem">↕</div>
+          <div class="star-line">end_station_id → station_id</div>
+        </div>
+        <div class="star-box fact">
+          <div class="star-box-title">Fact</div>
+          <div class="star-box-name">fact_trips</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>What goes in each table?</h3>
+
+  <div class="toggle-group">
+    <button class="toggle-btn active" onclick="showToggle('schema', 'fact', this)">📋 fact_trips</button>
+    <button class="toggle-btn" onclick="showToggle('schema', 'dim', this)">📍 dim_station</button>
+  </div>
+
+  <div id="schema-fact" class="toggle-pane active">
+    <p>The <strong>fact table</strong> captures what happened — each row is one bike trip. It stores numbers you can measure (like duration) and foreign keys pointing to dimension tables.</p>
+    <div class="table-label"><span class="badge badge-fact">fact table</span> fact_trips</div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Role</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">trip_id</td><td>INTEGER</td><td>Primary Key</td><td>Unique ID for each trip</td></tr>
+          <tr><td>subscriber_type</td><td>STRING</td><td>Attribute</td><td>Membership type (Annual, Walk Up, etc.)</td></tr>
+          <tr><td>bike_id</td><td>STRING</td><td>Attribute</td><td>Which bicycle was used</td></tr>
+          <tr><td>start_time</td><td>TIMESTAMP</td><td>Measurement</td><td>When the trip started</td></tr>
+          <tr><td class="fk">start_station_id</td><td>INTEGER</td><td>Foreign Key</td><td>→ links to dim_station</td></tr>
+          <tr><td class="fk">end_station_id</td><td>INTEGER</td><td>Foreign Key</td><td>→ links to dim_station</td></tr>
+          <tr><td>duration_minutes</td><td>INTEGER</td><td>Measurement</td><td>How long the trip took ← the metric!</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="schema-dim" class="toggle-pane">
+    <p>The <strong>dimension table</strong> captures the "who and where" — each row is one bike station. It stores descriptive attributes that give context to the trips.</p>
+    <div class="table-label"><span class="badge badge-dim">dimension table</span> dim_station</div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Role</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">station_id</td><td>INTEGER</td><td>Primary Key</td><td>Unique ID for each station</td></tr>
+          <tr><td>name</td><td>STRING</td><td>Attribute</td><td>Human-readable station name</td></tr>
+          <tr><td>location</td><td>STRING</td><td>Attribute</td><td>GPS coordinates</td></tr>
+          <tr><td>address</td><td>STRING</td><td>Attribute</td><td>Street address</td></tr>
+          <tr><td>property_type</td><td>STRING</td><td>Attribute</td><td>City Owned or Private</td></tr>
+          <tr><td>number_of_docks</td><td>INTEGER</td><td>Attribute</td><td>Capacity of the station</td></tr>
+          <tr><td>dbt_valid_from</td><td>TIMESTAMP</td><td>SCD Track</td><td>When this version of the record started</td></tr>
+          <tr><td>dbt_valid_to</td><td>TIMESTAMP</td><td>SCD Track</td><td>When this version ended (NULL = current)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <div class="callout-label">💡 Why separate tables?</div>
+    Station names and addresses don't change with every trip. By keeping them in a separate <em>dimension</em> table, we avoid storing "Congress Ave &amp; 2nd St" millions of times. We store it once and reference it by ID — cleaner, faster, and easier to update.
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" onclick="goTo(1)">← The Raw Data</button>
+    <button class="nav-btn primary" onclick="goTo(3)">Next: dbt Project →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 3: DBT PROJECT SETUP                  -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section" id="step-3">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">🛠️</div>
+    <div>
+      <div class="section-title">Setting Up the dbt Project</div>
+      <div class="section-subtitle">Your project folder structure and configuration</div>
+    </div>
+  </div>
+
+  <p>A dbt project is just a folder with a specific structure — SQL files, YAML configuration files, and a connection to your database. Think of it like a well-organized recipe binder.</p>
+
+  <h3>Step 1 — Create the project</h3>
+  <p>Run this command in your terminal. It creates the folder structure automatically:</p>
+
+  <div class="code-wrap">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <div class="code-filename">terminal</div>
+    </div>
+    <div class="code-body"><span class="fn">dbt</span> init austin_bikeshare_demo</div>
+  </div>
+
+  <h3>Step 2 — Connect to BigQuery</h3>
+  <p>dbt needs to know which database to talk to. You configure this in a file called <span class="inline-code">profiles.yml</span>. For BigQuery, it uses your Google Cloud credentials.</p>
+
+  <div class="code-wrap">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <div class="code-filename">~/.dbt/profiles.yml</div>
+    </div>
+    <div class="code-body"><span class="tbl">austin_bikeshare_demo</span>:
+  target: dev
+  outputs:
+    dev:
+      type: <span class="str">bigquery</span>
+      method: <span class="str">oauth</span>
+      project: <span class="str">your-gcp-project-id</span>
+      dataset: <span class="str">austin_bikeshare_dev</span>
+      threads: <span class="val">4</span>
+      timeout_seconds: <span class="val">300</span></div>
+  </div>
+
+  <h3>Step 3 — Declare your sources</h3>
+  <p>Before you can use the raw BigQuery public tables, you tell dbt where they live. This is done in a <span class="inline-code">sources.yml</span> file:</p>
+
+  <div class="code-wrap">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <div class="code-filename">models/sources.yml</div>
+    </div>
+    <div class="code-body"><span class="kw">version</span>: 2
+
+<span class="kw">sources</span>:
+  - <span class="kw">name</span>: <span class="str">austin_bikeshare</span>
+    <span class="kw">database</span>: <span class="str">bigquery-public-data</span>   <span class="cm"># the Google project</span>
+    <span class="kw">schema</span>: <span class="str">austin_bikeshare</span>        <span class="cm"># the dataset name</span>
+    <span class="kw">tables</span>:
+      - <span class="kw">name</span>: <span class="str">bikeshare_trips</span>
+      - <span class="kw">name</span>: <span class="str">bikeshare_stations</span></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="callout-label">💡 Why declare sources?</div>
+    Instead of hardcoding <span class="inline-code">bigquery-public-data.austin_bikeshare.bikeshare_trips</span> in every SQL file, you give it a short alias. In your models you can then write <span class="inline-code">{{ source('austin_bikeshare', 'bikeshare_trips') }}</span> — and if the source ever moves, you change one file, not dozens.
+  </div>
+
+  <h3>The project folder structure</h3>
+  <div class="code-wrap">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <div class="code-filename">austin_bikeshare_demo/</div>
+    </div>
+    <div class="code-body">austin_bikeshare_demo/
+├── <span class="fn">dbt_project.yml</span>      <span class="cm"># main config: project name, model settings</span>
+├── <span class="fn">models/</span>              <span class="cm"># your transformation SQL goes here</span>
+│   ├── <span class="fn">sources.yml</span>      <span class="cm"># where the raw data comes from</span>
+│   ├── <span class="fn">fact_trips.sql</span>   <span class="cm"># the fact table model</span>
+│   ├── <span class="fn">schema.yml</span>       <span class="cm"># tests and documentation</span>
+│   └── <span class="fn">star/</span>            <span class="cm"># dimension tables live here</span>
+│       ├── <span class="fn">dim_station.sql</span>
+│       └── <span class="fn">schema.yml</span>
+└── <span class="fn">snapshots/</span>           <span class="cm"># time-travel snapshots</span>
+    └── <span class="fn">station_snapshot.sql</span></div>
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" onclick="goTo(2)">← Star Schema</button>
+    <button class="nav-btn primary" onclick="goTo(4)">Next: Snapshots →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 4: SNAPSHOTS                          -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section" id="step-4">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">📸</div>
+    <div>
+      <div class="section-title">Snapshots — Time Travel for Your Data</div>
+      <div class="section-subtitle">How to track changes in source data over time</div>
+    </div>
+  </div>
+
+  <p>Bike stations change. A station might move to a new address, increase its number of docks, or be taken over by the city from a private operator. The raw <span class="inline-code">bikeshare_stations</span> table only shows you the <em>current</em> state — the history is lost.</p>
+
+  <div class="callout analogy">
+    <div class="callout-label">📷 Analogy</div>
+    A snapshot is like taking a daily photograph of a whiteboard. Today's photo shows today's information. Tomorrow's photo captures any changes. By keeping all the photos, you can see <em>when</em> things changed — and what they looked like before.
+  </div>
+
+  <p>This technique is called a <strong>Type-2 Slowly Changing Dimension (SCD Type 2)</strong>. Don't be put off by the name — it just means "we add new rows to record changes, instead of overwriting old ones."</p>
+
+  <h3>How the snapshot SQL looks</h3>
+
+  <div class="code-wrap">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <div class="code-filename">snapshots/station_snapshot.sql</div>
+    </div>
+    <div class="code-body"><span class="cm">-- Tell dbt this is a snapshot (not a regular model)</span>
+{% snapshot <span class="tbl">station_snapshot</span> %}
+
+  {{
+    config(
+      target_schema=<span class="str">'snapshots'</span>,
+      unique_key=<span class="str">'station_id'</span>,         <span class="cm">-- which column identifies a row</span>
+      strategy=<span class="str">'check'</span>,              <span class="cm">-- "check" means: look for any changes</span>
+      check_cols=<span class="str">'all'</span>               <span class="cm">-- check ALL columns for changes</span>
+    )
+  }}
+
+  <span class="kw">SELECT</span> *
+  <span class="kw">FROM</span> {{ source(<span class="str">'austin_bikeshare'</span>, <span class="str">'bikeshare_stations'</span>) }}
+
+{% endsnapshot %}</div>
+  </div>
+
+  <h3>What dbt adds automatically</h3>
+  <p>When you run <span class="inline-code">dbt snapshot</span>, dbt adds two special columns to every row:</p>
+
+  <div class="data-table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Column Added by dbt</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="pk">dbt_valid_from</td><td>When this version of the record <em>started</em> being true</td></tr>
+        <tr><td class="fk">dbt_valid_to</td><td>When this version <em>stopped</em> being true (NULL means it's still current)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Example: A station changes its dock count</h3>
+  <div class="data-table-wrap">
+    <table class="data-table">
+      <thead><tr><th>station_id</th><th>name</th><th>number_of_docks</th><th>dbt_valid_from</th><th>dbt_valid_to</th></tr></thead>
+      <tbody>
+        <tr><td class="pk">2538</td><td>Congress Ave & 2nd St</td><td>15</td><td>2020-01-01</td><td>2022-06-15</td></tr>
+        <tr style="background:#f0fbf2"><td class="pk">2538</td><td>Congress Ave & 2nd St</td><td><strong>19</strong></td><td>2022-06-15</td><td><em style="color:var(--accent3)">NULL (current)</em></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.85rem;color:var(--muted)">↑ The station had 15 docks until June 2022, then was upgraded to 19 docks. Both records are preserved.</p>
+
+  <div class="callout tip">
+    <div class="callout-label">💡 Why does this matter for analysis?</div>
+    If you're analyzing trips from 2021, you want to know that the station had 15 docks at that time — not the current 19. The snapshot lets you <em>join trip data to the station record that was valid at the time of the trip</em>, giving you historically accurate analysis.
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" onclick="goTo(3)">← dbt Project</button>
+    <button class="nav-btn primary" onclick="goTo(5)">Next: Models →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 5: MODELS                             -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section" id="step-5">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">⚙️</div>
+    <div>
+      <div class="section-title">dbt Models — Writing the Transformations</div>
+      <div class="section-subtitle">SQL files that define your analysis-ready tables</div>
+    </div>
+  </div>
+
+  <p>A <strong>dbt model</strong> is just a SQL <span class="inline-code">SELECT</span> statement saved as a <span class="inline-code">.sql</span> file. dbt reads the file, wraps it in a <span class="inline-code">CREATE TABLE</span> or <span class="inline-code">CREATE VIEW</span> statement, and runs it in BigQuery. You write the query logic; dbt handles the deployment.</p>
+
+  <div class="toggle-group">
+    <button class="toggle-btn active" onclick="showToggle('models', 'fact', this)">📋 fact_trips.sql</button>
+    <button class="toggle-btn" onclick="showToggle('models', 'dim', this)">📍 dim_station.sql</button>
+    <button class="toggle-btn" onclick="showToggle('models', 'config', this)">⚙️ dbt_project.yml</button>
+  </div>
+
+  <div id="models-fact" class="toggle-pane active">
+    <p>The <strong>fact model</strong> selects directly from the raw source table. We pick the columns we care about and give them clear names.</p>
+    <div class="code-wrap">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <div class="code-filename">models/fact_trips.sql</div>
+      </div>
+      <div class="code-body"><span class="kw">SELECT</span>
+    trip_id,
+    subscriber_type,
+    bike_id,
+    start_time,
+    start_station_id,
+    end_station_id,
+    duration_minutes
+<span class="kw">FROM</span>
+    <span class="cm">-- {{ source(...) }} tells dbt: look up this table in sources.yml</span>
+    {{ source(<span class="str">'austin_bikeshare'</span>, <span class="str">'bikeshare_trips'</span>) }}</div>
+    </div>
+    <div class="callout tip">
+      <div class="callout-label">💡 What dbt does with this file</div>
+      dbt compiles this into:<br>
+      <span class="inline-code">CREATE OR REPLACE VIEW `your-project`.`dev`.`fact_trips` AS SELECT trip_id, ...</span><br>
+      Your BigQuery project now has a clean <em>fact_trips</em> view!
+    </div>
+  </div>
+
+  <div id="models-dim" class="toggle-pane">
+    <p>The <strong>dimension model</strong> reads from the <em>snapshot table</em> (not the raw source) so it includes the historical version tracking columns.</p>
+    <div class="code-wrap">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <div class="code-filename">models/star/dim_station.sql</div>
+      </div>
+      <div class="code-body"><span class="kw">SELECT</span>
+    station_id,
+    name,
+    location,
+    address,
+    property_type,
+    number_of_docks,
+    dbt_valid_from,       <span class="cm">-- added by dbt snapshot</span>
+    dbt_valid_to          <span class="cm">-- NULL means this is the current record</span>
+<span class="kw">FROM</span>
+    <span class="cm">-- {{ ref(...) }} tells dbt: find the model/snapshot named 'station_snapshot'</span>
+    {{ ref(<span class="str">'station_snapshot'</span>) }}</div>
+    </div>
+    <div class="callout">
+      <div class="callout-label">🔗 ref() vs source()</div>
+      <ul>
+        <li><span class="inline-code">{{ source() }}</span> — points to a raw external table you don't own</li>
+        <li><span class="inline-code">{{ ref() }}</span> — points to another dbt model or snapshot in your project</li>
+      </ul>
+      Using <span class="inline-code">ref()</span> tells dbt about dependencies, so it knows to build <span class="inline-code">station_snapshot</span> <em>before</em> <span class="inline-code">dim_station</span>.
+    </div>
+  </div>
+
+  <div id="models-config" class="toggle-pane">
+    <p>The <span class="inline-code">dbt_project.yml</span> file is the master config. Here we tell dbt to materialize our star schema models as <strong>physical tables</strong> (not views) in a dedicated <span class="inline-code">star</span> schema:</p>
+    <div class="code-wrap">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <div class="code-filename">dbt_project.yml</div>
+      </div>
+      <div class="code-body"><span class="kw">name</span>: <span class="str">'austin_bikeshare_demo'</span>
+<span class="kw">version</span>: <span class="str">'1.0.0'</span>
+<span class="kw">profile</span>: <span class="str">'austin_bikeshare_demo'</span>
+
+<span class="kw">models</span>:
+  austin_bikeshare_demo:
+    star:                          <span class="cm"># the /models/star/ subfolder</span>
+      +materialized: <span class="str">table</span>         <span class="cm"># build as a real table, not a view</span>
+      +schema: <span class="str">star</span>               <span class="cm"># deploy into a 'star' schema in BigQuery</span></div>
+    </div>
+    <div class="callout tip">
+      <div class="callout-label">💡 View vs Table</div>
+      A <strong>view</strong> re-runs the SQL every time someone queries it — always fresh, but slower for big datasets. A <strong>table</strong> stores the result physically — faster queries, but you need to refresh it when source data changes.
+    </div>
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" onclick="goTo(4)">← Snapshots</button>
+    <button class="nav-btn primary" onclick="goTo(6)">Next: Tests →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 6: TESTS                              -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section" id="step-6">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">✅</div>
+    <div>
+      <div class="section-title">Data Quality Tests</div>
+      <div class="section-subtitle">Trust but verify — automated checks on your data</div>
+    </div>
+  </div>
+
+  <p>After building your tables, how do you know the data is correct? dbt lets you define <strong>tests</strong> in YAML files that run automatically to catch data quality issues before they reach your business analysts.</p>
+
+  <div class="callout analogy">
+    <div class="callout-label">🏥 Analogy</div>
+    Think of dbt tests like a health check-up. You don't wait until someone feels sick to go to the doctor — you run regular tests to catch problems early. Data tests work the same way.
+  </div>
+
+  <h3>Tests for the fact table</h3>
+  <div class="code-wrap">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <div class="code-filename">models/schema.yml</div>
+    </div>
+    <div class="code-body"><span class="kw">version</span>: 2
+
+<span class="kw">models</span>:
+  - <span class="kw">name</span>: <span class="str">fact_trips</span>
+    <span class="kw">columns</span>:
+      - <span class="kw">name</span>: <span class="str">trip_id</span>
+        <span class="kw">tests</span>:
+          - unique                 <span class="cm"># every trip must have a different ID</span>
+          - not_null               <span class="cm"># no trip can be missing an ID</span>
+
+      - <span class="kw">name</span>: <span class="str">start_time</span>
+        <span class="kw">tests</span>:
+          - not_null               <span class="cm"># every trip must have a start time</span>
+
+      - <span class="kw">name</span>: <span class="str">duration_minutes</span>
+        <span class="kw">tests</span>:
+          - not_null               <span class="cm"># every trip must have a duration</span>
+
+      - <span class="kw">name</span>: <span class="str">start_station_id</span>
+        <span class="kw">tests</span>:
+          - relationships:
+              to: ref(<span class="str">'dim_station'</span>)     <span class="cm"># must link to a real station</span>
+              field: station_id
+              severity: <span class="str">warn</span>           <span class="cm"># warn, don't fail (old stations may be missing)</span></div>
+  </div>
+
+  <h3>Tests for the dimension table</h3>
+  <div class="code-wrap">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <div class="code-filename">models/star/schema.yml</div>
+    </div>
+    <div class="code-body"><span class="kw">version</span>: 2
+
+<span class="kw">models</span>:
+  - <span class="kw">name</span>: <span class="str">dim_station</span>
+    <span class="kw">columns</span>:
+      - <span class="kw">name</span>: <span class="str">station_id</span>
+        <span class="kw">tests</span>:
+          - unique
+          - not_null
+      - <span class="kw">name</span>: <span class="str">name</span>
+        <span class="kw">tests</span>:
+          - not_null
+      - <span class="kw">name</span>: <span class="str">location</span>
+        <span class="kw">tests</span>:
+          - not_null</div>
+  </div>
+
+  <h3>Built-in dbt tests explained</h3>
+  <div class="data-table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Test Name</th><th>What it checks</th><th>Fails when…</th></tr></thead>
+      <tbody>
+        <tr><td class="pk">unique</td><td>No two rows have the same value</td><td>Duplicate IDs exist</td></tr>
+        <tr><td class="pk">not_null</td><td>No blank/missing values</td><td>A row has a NULL in that column</td></tr>
+        <tr><td class="pk">relationships</td><td>Foreign key integrity</td><td>A trip references a non-existent station</td></tr>
+        <tr><td class="pk">accepted_values</td><td>Column only contains specific values</td><td>An unexpected value appears</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warning">
+    <div class="callout-label">⚠️ Real-World Note</div>
+    Our data shows that about 110,000 trips reference station IDs that no longer exist (decommissioned stations). This is why we set <span class="inline-code">severity: warn</span> on the relationship test — it flags the issue without blocking the pipeline. In a real business scenario, you'd investigate whether to ignore, backfill, or archive this data.
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" onclick="goTo(5)">← Models</button>
+    <button class="nav-btn primary" onclick="goTo(7)">Next: Run It! →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 7: RUN IT                             -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section" id="step-7">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">🚀</div>
+    <div>
+      <div class="section-title">Running the Pipeline</div>
+      <div class="section-subtitle">Four commands that build your data warehouse</div>
+    </div>
+  </div>
+
+  <p>You've written all the files. Now it's time to execute the pipeline. There are four dbt commands you'll use — in order:</p>
+
+  <ul class="steps-list">
+    <li>
+      <div class="step-circle">1</div>
+      <div class="step-body">
+        <strong>dbt debug — Check your connection</strong>
+        Verifies that dbt can talk to BigQuery. Run this first if something isn't working.
+        <div class="code-wrap" style="margin-top:10px">
+          <div class="code-header"><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div><div class="code-filename">terminal</div></div>
+          <div class="code-body"><span class="fn">dbt</span> debug</div>
+        </div>
+      </div>
+    </li>
+    <li>
+      <div class="step-circle blue">2</div>
+      <div class="step-body">
+        <strong>dbt snapshot — Capture the current state of stations</strong>
+        Runs your snapshot file and creates/updates the <span class="inline-code">station_snapshot</span> table in BigQuery with SCD Type 2 history.
+        <div class="code-wrap" style="margin-top:10px">
+          <div class="code-header"><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div><div class="code-filename">terminal</div></div>
+          <div class="code-body"><span class="fn">dbt</span> snapshot</div>
+        </div>
+        <p style="margin-top:8px;font-size:.85rem;color:var(--muted)">✓ Expected output: <em>1 of 1 OK snapshotted snapshots.station_snapshot</em></p>
+      </div>
+    </li>
+    <li>
+      <div class="step-circle">3</div>
+      <div class="step-body">
+        <strong>dbt run — Build the models</strong>
+        Runs all your SQL models in the correct dependency order: <span class="inline-code">dim_station</span> depends on the snapshot, so dbt builds snapshot → dim_station → fact_trips.
+        <div class="code-wrap" style="margin-top:10px">
+          <div class="code-header"><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div><div class="code-filename">terminal</div></div>
+          <div class="code-body"><span class="fn">dbt</span> run</div>
+        </div>
+        <p style="margin-top:8px;font-size:.85rem;color:var(--muted)">✓ Expected output: <em>2 of 2 OK created sql table/view</em></p>
+      </div>
+    </li>
+    <li>
+      <div class="step-circle green">4</div>
+      <div class="step-body">
+        <strong>dbt test — Validate data quality</strong>
+        Runs all tests defined in your <span class="inline-code">schema.yml</span> files. Checks for nulls, duplicates, and referential integrity.
+        <div class="code-wrap" style="margin-top:10px">
+          <div class="code-header"><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div><div class="code-filename">terminal</div></div>
+          <div class="code-body"><span class="fn">dbt</span> test</div>
+        </div>
+        <p style="margin-top:8px;font-size:.85rem;color:var(--muted)">✓ Expected: <em>0 errors, 1 warning</em> (the FK relationship warning we set intentionally)</p>
+      </div>
+    </li>
+  </ul>
+
+  <h3>What you now have in BigQuery</h3>
+
+  <div class="diagram">
+    <div class="diagram-flow" style="flex-wrap:wrap;gap:12px">
+      <div class="flow-node snapshot">
+        <div class="flow-node-icon">📸</div>
+        <div class="flow-node-label">Snapshot</div>
+        <div class="flow-node-name">station_snapshot</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node model-dim">
+        <div class="flow-node-icon">📍</div>
+        <div class="flow-node-label">Dimension Table</div>
+        <div class="flow-node-name">star.dim_station</div>
+      </div>
+      <div class="flow-arrow" style="opacity:0;pointer-events:none">→</div>
+      <div class="flow-node source" style="flex-basis:100%;display:none"></div>
+    </div>
+    <div class="diagram-flow" style="margin-top:16px">
+      <div class="flow-node source">
+        <div class="flow-node-icon">🌐</div>
+        <div class="flow-node-label">Raw Source</div>
+        <div class="flow-node-name">bikeshare_trips</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node model-fact">
+        <div class="flow-node-icon">📋</div>
+        <div class="flow-node-label">Fact Table</div>
+        <div class="flow-node-name">fact_trips</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <div class="callout-label">💡 Run order matters</div>
+    Always run <span class="inline-code">dbt snapshot</span> before <span class="inline-code">dbt run</span>. The <span class="inline-code">dim_station</span> model reads from the snapshot — if the snapshot doesn't exist yet, the model build will fail.
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" onclick="goTo(6)">← Tests</button>
+    <button class="nav-btn primary" onclick="goTo(8)">Next: Review →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- STEP 8: REVIEW / QUIZ                      -->
+<!-- ══════════════════════════════════════════ -->
+<div class="section" id="step-8">
+<div class="container">
+  <div class="section-header">
+    <div class="section-icon">🎓</div>
+    <div>
+      <div class="section-title">Review & Knowledge Check</div>
+      <div class="section-subtitle">Let's make sure the key ideas have landed</div>
+    </div>
+  </div>
+
+  <p>You've just walked through the full journey — from a raw public dataset in BigQuery to a tested, analysis-ready star schema built with dbt. Let's summarise and check your understanding.</p>
+
+  <h3>The Full Journey</h3>
+  <div class="diagram">
+    <div class="diagram-flow" style="flex-wrap:wrap;gap:12px;justify-content:center">
+      <div class="flow-node source">
+        <div class="flow-node-icon">🌐</div>
+        <div class="flow-node-label">Step 1</div>
+        <div class="flow-node-name">Raw BigQuery<br>Public Data</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node source">
+        <div class="flow-node-icon">📐</div>
+        <div class="flow-node-label">Step 2</div>
+        <div class="flow-node-name">Design<br>Star Schema</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node snapshot">
+        <div class="flow-node-icon">🛠️</div>
+        <div class="flow-node-label">Step 3</div>
+        <div class="flow-node-name">dbt Project<br>Setup</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node snapshot">
+        <div class="flow-node-icon">📸</div>
+        <div class="flow-node-label">Step 4</div>
+        <div class="flow-node-name">dbt Snapshot<br>(SCD Type 2)</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node model-dim">
+        <div class="flow-node-icon">⚙️</div>
+        <div class="flow-node-label">Step 5</div>
+        <div class="flow-node-name">dbt Models<br>(SQL files)</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node model-fact">
+        <div class="flow-node-icon">✅</div>
+        <div class="flow-node-label">Step 6</div>
+        <div class="flow-node-name">Data Quality<br>Tests</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node model-dim">
+        <div class="flow-node-icon">🚀</div>
+        <div class="flow-node-label">Step 7</div>
+        <div class="flow-node-name">Run Pipeline<br>in BigQuery</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Quick Knowledge Check</h3>
+  <p>Test yourself — click the answer you think is correct.</p>
+
+  <div class="quiz-q" id="q1">
+    <p>1. In a star schema, what is the main purpose of a <strong>fact table</strong>?</p>
+    <div class="quiz-option" onclick="answer('q1','wrong', this)">To store descriptive information like station names and addresses</div>
+    <div class="quiz-option" onclick="answer('q1','correct', this)">To record events (like trips) with measurable values and foreign keys</div>
+    <div class="quiz-option" onclick="answer('q1','wrong', this)">To track changes to data over time using SCD Type 2</div>
+    <div class="quiz-feedback" id="q1-feedback"></div>
+  </div>
+
+  <div class="quiz-q" id="q2">
+    <p>2. What command builds your dbt models (fact and dimension tables) in BigQuery?</p>
+    <div class="quiz-option" onclick="answer('q2','wrong', this)"><code>dbt snapshot</code></div>
+    <div class="quiz-option" onclick="answer('q2','correct', this)"><code>dbt run</code></div>
+    <div class="quiz-option" onclick="answer('q2','wrong', this)"><code>dbt test</code></div>
+    <div class="quiz-feedback" id="q2-feedback"></div>
+  </div>
+
+  <div class="quiz-q" id="q3">
+    <p>3. A bike station's dock count changes from 15 to 19. You had a dbt snapshot running. What happens?</p>
+    <div class="quiz-option" onclick="answer('q3','wrong', this)">The old row (15 docks) is overwritten. Only the new value (19) is kept.</div>
+    <div class="quiz-option" onclick="answer('q3','correct', this)">A new row is added for 19 docks, and the old row gets a <code>dbt_valid_to</code> date. Both are kept.</div>
+    <div class="quiz-option" onclick="answer('q3','wrong', this)">Nothing changes — snapshots only run once.</div>
+    <div class="quiz-feedback" id="q3-feedback"></div>
+  </div>
+
+  <div class="quiz-q" id="q4">
+    <p>4. In dbt models, what's the difference between <code>{{ source() }}</code> and <code>{{ ref() }}</code>?</p>
+    <div class="quiz-option" onclick="answer('q4','correct', this)"><code>source()</code> points to external raw tables; <code>ref()</code> points to other dbt models or snapshots in your project</div>
+    <div class="quiz-option" onclick="answer('q4','wrong', this)">They are interchangeable — both work the same way</div>
+    <div class="quiz-option" onclick="answer('q4','wrong', this)"><code>ref()</code> is for BigQuery only; <code>source()</code> works with any database</div>
+    <div class="quiz-feedback" id="q4-feedback"></div>
+  </div>
+
+  <div style="margin-top:32px;padding:24px;background:var(--cream);border-radius:12px;border:1px solid var(--border)">
+    <h3 style="margin-top:0">🎉 You've completed the walkthrough!</h3>
+    <p>You now understand how to:</p>
+    <ul>
+      <li>Identify raw source data in BigQuery Public Datasets</li>
+      <li>Design a star schema (fact + dimension tables)</li>
+      <li>Set up a dbt project with <span class="inline-code">profiles.yml</span> and <span class="inline-code">sources.yml</span></li>
+      <li>Write snapshots for SCD Type 2 history tracking</li>
+      <li>Write dbt models using <span class="inline-code">ref()</span> and <span class="inline-code">source()</span></li>
+      <li>Define data quality tests in <span class="inline-code">schema.yml</span></li>
+      <li>Run the full pipeline with <span class="inline-code">dbt snapshot</span>, <span class="inline-code">dbt run</span>, and <span class="inline-code">dbt test</span></li>
+    </ul>
+    <p style="margin-bottom:0">Your next step is to practice with the <strong>liquor sales dataset</strong> — adding snapshots, normalizing dimensions, and building a snowflake schema.</p>
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn" onclick="goTo(7)">← Run It!</button>
+    <button class="nav-btn primary" onclick="goTo(0)">↩ Start Over</button>
+  </div>
+</div>
+</div>
+
+<script>
+  let current = 0;
+  const total = 9;
+  const visited = new Set([0]);
+
+  function goTo(n) {
+    // mark old as done
+    document.querySelector(`[data-step="${current}"]`).classList.remove('active');
+    document.querySelector(`[data-step="${current}"]`).classList.add('done');
+    document.getElementById(`step-${current}`).classList.remove('active');
+
+    current = n;
+    visited.add(n);
+
+    // activate new
+    document.querySelector(`[data-step="${n}"]`).classList.remove('done');
+    document.querySelector(`[data-step="${n}"]`).classList.add('active');
+    document.getElementById(`step-${n}`).classList.add('active');
+
+    // scroll stepper pill into view
+    document.querySelector(`[data-step="${n}"]`).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function showToggle(group, pane, btn) {
+    document.querySelectorAll(`#${group}-${pane}`).forEach(() => {});
+    // find all panes for this group
+    const paneEls = document.querySelectorAll(`[id^="${group}-"]`);
+    paneEls.forEach(el => el.classList.remove('active'));
+    document.getElementById(`${group}-${pane}`).classList.add('active');
+
+    // buttons
+    btn.closest('.toggle-group').querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  const feedbackMessages = {
+    correct: [
+      "Exactly right! Well done.",
+      "That's correct! Great understanding.",
+      "Perfect — you've got it!",
+      "Yes! That's precisely it."
+    ],
+    wrong: [
+      "Not quite — have another look at the explanation above.",
+      "That's not right — re-read the relevant section and try again.",
+      "Close, but not correct. Review the explanation above."
+    ]
+  };
+
+  function answer(qId, result, el) {
+    const q = document.getElementById(qId);
+    if (q.dataset.answered) return; // already answered
+    q.dataset.answered = '1';
+
+    el.classList.add(result);
+    const feedback = document.getElementById(`${qId}-feedback`);
+    const msgs = feedbackMessages[result];
+    feedback.textContent = msgs[Math.floor(Math.random() * msgs.length)];
+    feedback.className = `quiz-feedback show ${result === 'correct' ? 'ok' : 'bad'}`;
+
+    if (result === 'correct') {
+      // Disable all options
+      q.querySelectorAll('.quiz-option').forEach(opt => {
+        opt.style.pointerEvents = 'none';
+        if (opt !== el) opt.style.opacity = '.45';
+      });
+    } else {
+      el.style.pointerEvents = 'none';
+    }
+  }
+</script>
+</body>
+</html>
